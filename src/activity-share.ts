@@ -1,3 +1,8 @@
+import type Database from "better-sqlite3";
+export function repositoryWeights(db: Database.Database, repo: string): Weights {
+  const row = db.prepare("SELECT weights FROM repository_weights WHERE repo = ?").get(repo) as {weights: string} | undefined;
+  return configuredWeights(row?.weights);
+}
 export type Activity = {author: string; merged: number; commits: number; reviews: number};
 export type Weights = [number, number, number];
 export function configuredWeights(value = process.env.ACTIVITY_WEIGHTS): Weights {

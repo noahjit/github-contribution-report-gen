@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS review (
 );
 `);
 db.exec(`
+CREATE TABLE IF NOT EXISTS repository_weights (repo TEXT PRIMARY KEY, weights TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS repository_installation (
   repo TEXT PRIMARY KEY, installation_id INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1
 );
@@ -72,7 +73,7 @@ return db;
 
 export function deleteRepository(db: Database.Database, repo: string) {
   db.transaction(() => {
-    for (const table of ["pull_request", "ai_declaration", "commit_record", "review", "identity_alias", "pr_commit", "processed_command"]) {
+    for (const table of ["pull_request", "ai_declaration", "commit_record", "review", "identity_alias", "pr_commit", "processed_command", "repository_weights"]) {
       db.prepare(`DELETE FROM ${table} WHERE repo = ?`).run(repo);
     }
     db.prepare("UPDATE repository_installation SET active = 0 WHERE repo = ?").run(repo);

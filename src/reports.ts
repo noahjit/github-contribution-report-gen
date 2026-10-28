@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { declarationFields, type Field } from "./declaration-fields.js";
-import {activityShares, configuredWeights} from "./activity-share.js";
+import {activityShares, repositoryWeights} from "./activity-share.js";
 
 export function safe(value: unknown): string {
   return String(value ?? "").replace(/[\\`*_\[\]#]/g, "\\$&")
@@ -46,7 +46,7 @@ export function contributionReport(db: Database.Database, repo: string): string 
     ON p.repo = r.repo AND p.number = r.pr_number WHERE r.repo = ? AND r.reviewer != p.author
     GROUP BY reviewer ORDER BY reviewer`).all(repo) as {reviewer: string; reviews: number; approvals: number; changes: number}[];
   for (const r of reviews) lines.push(`| ${safe(r.reviewer)} | ${r.reviews} | ${r.approvals} | ${r.changes} |`);
-  const weights = configuredWeights();
+  const weights = repositoryWeights(db, repo);
   const estimated = activityShares([
     ...prs.map(p => ({author: p.author, merged: p.merged, commits: 0, reviews: 0})),
     ...[...totals].map(([author, c]) => ({author, merged: 0, commits: c.commits, reviews: 0})),

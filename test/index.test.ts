@@ -72,6 +72,22 @@ describe("command trust and ownership", () => {
 });
 
 describe("visibility and identity", () => {
+  test("repository weights are admin-controlled, isolated, validated and resettable", async () => {
+    const denied = context("/weights 50 20 30");
+    denied.octokit.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({data: {permission: "write"}});
+    await command(denied); expect(count("repository_weights")).toBe(0);
+    for (const args of ["0 0 0", "-1 2 3", "1 2", "10001 2 3"]) await command(context("/weights " + args));
+    expect(count("repository_weights")).toBe(0);
+    await command(context("/weights 50 20 30")); expect(count("repository_weights")).toBe(1);
+    const view = context("/weights"); await command(view); expect(bodyOf(view)).toContain("50 / 20 / 30");
+    const report = context("/report"); await command(report); expect(bodyOf(report)).toContain("50 / 20 / 30");
+    const other = context("/weights"); other.payload.repository.full_name = "team/other";
+    await command(other); expect(bodyOf(other)).toContain("40 / 30 / 30");
+    await command(context("/weights reset")); expect(count("repository_weights")).toBe(0);
+    await command(context("/weights 5 2 3"));
+    const removal = context(); removal.payload = {installation: {id: 2}, repositories_removed: [{full_name: "team/project"}]} as any;
+    await handlers["installation_repositories.removed"](removal); expect(count("repository_weights")).toBe(0);
+  });
   test.each(["/report", "/declaration bounded"])("requires public acknowledgement for %s", async text => {
     const ctx = context(text); ctx.payload.repository.private = false; await command(ctx);
     expect(bodyOf(ctx)).toContain("repeat your command with --public");

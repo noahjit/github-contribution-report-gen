@@ -5,6 +5,7 @@ import { findAiCoAuthors } from "./trailers.js";
 import { backfillRepo, syncPrCommits } from "./backfill.js";
 import { contributionReport, declarationDraft } from "./reports.js";
 import { githubDiagnostic } from "./diagnostics.js";
+import {configuredWeights, repositoryWeights} from "./activity-share.js";
 
 const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const help = `Commands must occupy a new comment and come from a repository owner, member or collaborator.
@@ -16,6 +17,7 @@ const help = `Commands must occupy a new comment and come from a repository owne
 - /backfill — rescan history (at most once every five minutes per repository).
 - /alias <email> <login> or /alias remove <email> — map an unlinked commit email (repository admins only).
 - /help — show this help.
+- /weights — show activity weights; admins can set /weights 40 30 30 or /weights reset.
 
 Reports and drafts are visible to everyone who can access this repository. On public repositories they require --public, for example /declaration bounded --public. Never put sensitive information in public commands.`;
 
@@ -104,7 +106,7 @@ export function registerApp(app: Probot, db: Database.Database) {
   }));
   app.on("issue_comment.created", context => {
     const {comment, issue, repository, installation} = context.payload;
-    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help)(?:\s+([\s\S]*))?$/);
+    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help|weights)(?:\s+([\s\S]*))?$/);
     if (!command || !comment.user || comment.user.type === "Bot" || !trusted.has(comment.author_association) || !installation) return Promise.resolve();
     const login = comment.user.login;
     return run(context, async () => {
@@ -144,6 +146,21 @@ export function registerApp(app: Probot, db: Database.Database) {
         const result = await backfillRepo(db, context.octokit, repository.owner.login, repository.name, context.log);
         lastBackfill.set(repo, Date.now());
         response = `Backfill complete: ${result.commits} commits, ${result.prs} PRs and ${result.reviews} reviews scanned. AI command history is not reconstructed.`;
+      } else if (name === "weights") {
+        if (args) {
+          let weights;
+          if (args !== "reset") {
+            if (!/^\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\s+\d+(?:\.\d+)?$/.test(args)) { await send("Use /weights <merged-PRs> <commits> <reviews>, for example /weights 50 20 30, or /weights reset."); return; }
+            try { weights = configuredWeights(args.split(/\s+/).join(",")); }
+            catch { await send("Weights must be between 0 and 10000, with at least one positive weight."); return; }
+          }
+          const permission = await context.octokit.rest.repos.getCollaboratorPermissionLevel({owner: repository.owner.login, repo: repository.name, username: login});
+          if (permission.data.permission !== "admin") { await send("Only repository administrators can change activity weights. Use /weights to view them."); return; }
+          if (weights) db.prepare("INSERT OR REPLACE INTO repository_weights VALUES (?, ?)").run(repo, weights.join(","));
+          else db.prepare("DELETE FROM repository_weights WHERE repo = ?").run(repo);
+        }
+        const weights = repositoryWeights(db, repo), sum = weights.reduce((a, b) => a + b, 0);
+        response = `Repository activity weights (merged PRs / commits / reviews): ${weights.join(" / ")} (${weights.map(w => (w / sum * 100).toFixed(1) + "%").join(" / ")}). Empty categories redistribute their weight. Request a new /report to apply these weights; earlier reports stay unchanged. Admins can use /weights 50 20 30 or /weights reset.`;
       } else if (name === "alias") {
         const permission = await context.octokit.rest.repos.getCollaboratorPermissionLevel({owner: repository.owner.login, repo: repository.name, username: login});
         if (permission.data.permission !== "admin") { await send("Only repository administrators can change identity aliases."); return; }

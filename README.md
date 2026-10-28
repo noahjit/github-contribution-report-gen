@@ -75,3 +75,7 @@ Multiple entries now appear as separate interaction blocks within each tool sect
 The operator can set `ACTIVITY_WEIGHTS=40,30,30` in `.env` or host environment settings, then restart. Values are relative weights in the order merged PRs, commits, reviews. Zero disables a category; at least one weight must be positive. Invalid settings produce a clear configuration error. Active weights and the category-share breakdown are shown in every report and local report export.
 
 The estimate excludes known `[bot]` logins and `unknown` authors. Unlinked emails remain separate until an administrator adds an alias. Raw activity tables remain available. AI declarations and trailer counts do not affect the estimate. PR and commit activity overlaps; repeated review events, branch history, squash merges and incomplete webhook coverage can affect the result. Use the breakdown to discuss recorded activity rather than assigning grades or assuming it measures effort or quality.
+
+### Team-editable weights
+
+Comment `/weights` on an issue or PR to view your repository's weights. Repository admins can use `/weights 50 20 30` to set relative weights for merged PRs, commits and reviews, or `/weights reset` to restore the operator's ACTIVITY_WEIGHTS defaults. Weights need not total 100; they are normalized automatically. Changes persist across restarts, apply only to this repository, and are deleted when repository access is removed. Non-admin collaborators can view weights but cannot change them. Generate a fresh report after changing weights; old reports remain snapshots.
