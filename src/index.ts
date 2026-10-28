@@ -3,9 +3,13 @@ import type Database from "better-sqlite3";
 import { openDatabase, deleteRepository } from "./db.js";
 import { findAiCoAuthors } from "./trailers.js";
 import { backfillRepo, syncPrCommits } from "./backfill.js";
-import { contributionReport, declarationDraft } from "./reports.js";
+import { declarationDraft } from "./reports.js";
 import { githubDiagnostic } from "./diagnostics.js";
 import {configuredWeights, repositoryWeights} from "./activity-share.js";
+import {missingDetailPrompt} from "./declaration-fields.js";
+import {publishSnapshot, recordConfirmation, confirmationSummary} from "./confirmations.js";
+import {createDownload, downloadBase, downloadHandler} from "./downloads.js";
+import {declarationWord} from "./word.js";
 
 const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const help = `Commands must occupy a new comment and come from a repository owner, member or collaborator.
@@ -18,6 +22,10 @@ const help = `Commands must occupy a new comment and come from a repository owne
 - /alias <email> <login> or /alias remove <email> — map an unlinked commit email (repository admins only).
 - /help — show this help.
 - /weights — show activity weights; admins can set /weights 40 30 30 or /weights reset.
+- /declaration word [bounded] — download your editable Word draft (15-minute link).
+- /confirm <report-id> — acknowledge a reviewed report snapshot.
+- /flag <report-id> <reason> — flag missing or incorrect work.
+- /confirmations <report-id> — view individual team responses.
 
 Reports and drafts are visible to everyone who can access this repository. On public repositories they require --public, for example /declaration bounded --public. Never put sensitive information in public commands.`;
 
@@ -106,7 +114,7 @@ export function registerApp(app: Probot, db: Database.Database) {
   }));
   app.on("issue_comment.created", context => {
     const {comment, issue, repository, installation} = context.payload;
-    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help|weights)(?:\s+([\s\S]*))?$/);
+    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help|weights|confirm|flag|confirmations)(?:\s+([\s\S]*))?$/);
     if (!command || !comment.user || comment.user.type === "Bot" || !trusted.has(comment.author_association) || !installation) return Promise.resolve();
     const login = comment.user.login;
     return run(context, async () => {
@@ -127,19 +135,41 @@ export function registerApp(app: Probot, db: Database.Database) {
           const result = action === "edit"
             ? db.prepare("UPDATE ai_declaration SET details = ? WHERE id = ? AND repo = ? AND number = ? AND declared_by = ?").run(details!.trim(), id, repo, issue.number, login)
             : db.prepare("DELETE FROM ai_declaration WHERE id = ? AND repo = ? AND number = ? AND declared_by = ?").run(id, repo, issue.number, login);
-          response = result.changes ? `AI entry ${id} ${action === "edit" ? "updated" : "removed"}. Previously posted reports and command comments are unchanged; regenerate reports and delete old comments separately if needed.` : "Entry not found among your declarations in this issue or PR.";
+          if (result.changes) db.prepare("DELETE FROM declaration_download WHERE repo = ?").run(repo);
+          response = result.changes ? `### AI entry ${id} ${action === "edit" ? "updated" : "removed"}\n\n${action === "edit" ? missingDetailPrompt(details!, id) + "\n\n" : ""}Previously posted reports are unchanged. Generate a fresh declaration to see this change.` : "Entry not found among your declarations in this issue or PR.";
         } else if (!args || /^(edit|remove)(?:\s|$)/.test(args) || args.length > 4000) {
           await send("Use /ai <details> (up to 4,000 characters), /ai edit <entry-id> <details>, or /ai remove <entry-id>."); return;
         } else {
           const result = db.prepare("INSERT OR IGNORE INTO ai_declaration(repo, number, declared_by, details, source, comment_id) VALUES (?, ?, ?, ?, 'command', ?)").run(repo, issue.number, login, args, comment.id);
-          response = `AI use recorded as entry ${result.lastInsertRowid} for #${issue.number}. Correct it with /ai edit <entry-id> <details>, or remove it with /ai remove <entry-id>.`;
+          db.prepare("DELETE FROM declaration_download WHERE repo = ?").run(repo);
+          response = `### AI use saved\n\n**Entry ${result.lastInsertRowid}** · #${issue.number}\n\n${missingDetailPrompt(args, result.lastInsertRowid)}\n\nEdit: \`/ai edit ${result.lastInsertRowid} <details>\` · Remove: \`/ai remove ${result.lastInsertRowid}\`\n\nNext: request \`/declaration\` on a PR (add \`--public\` on public repositories).`;
         }
       } else if (name === "report" || name === "declaration") {
         const words = args.split(/\s+/).filter(Boolean);
-        if (words.some(w => w !== "--public" && !(name === "declaration" && w === "bounded"))) { await send("Use /report [--public] or /declaration [bounded] [--public]."); return; }
+        if (words.some(w => w !== "--public" && !(name === "declaration" && ["bounded", "word"].includes(w)))) { await send("Use /report [--public] or /declaration [word] [bounded] [--public]."); return; }
         if (!issue.pull_request) { await send("Request reports and declarations on a pull request. They are visible to everyone with repository access."); return; }
         if (!repository.private && !words.includes("--public")) { await send("This repository is public. To publish the output where anyone can read it, repeat your command with --public. Use the operator's local export for a private copy."); return; }
-        response = "**Visibility: everyone with access to this repository can read this output.**\n\n" + (name === "report" ? contributionReport(db, repo) : declarationDraft(db, repo, login, words.includes("bounded")));
+        const visibility = repository.private ? "_Visible to everyone with repository access._" : "_Public output: anyone can read this._";
+        if (name === "report") {
+          const snapshot = publishSnapshot(db, repo, issue.number);
+          response = visibility + "\n\n" + snapshot.body + "\n\n" + confirmationSummary(db, repo, issue.number, snapshot.id);
+        } else {
+          const draft = declarationDraft(db, repo, login, words.includes("bounded"));
+          if (words.includes("word")) {
+            const base = downloadBase();
+            if (!base) { await send("### Word download setup needed\n\nThe operator must set `PUBLIC_BASE_URL` to the app's reachable origin. For local testing use `http://localhost:3000`. Smee forwards webhooks only; it does not host downloads. Meanwhile, use `/declaration` for Markdown or the local Word export in the README."); return; }
+            const link = createDownload(db, repo, await declarationWord(draft), base);
+            response = `### Your Word declaration\n\n[Download editable Word draft](${link})\n\n**Expires in 15 minutes. Anyone with the link can download it; share it carefully.** New AI entries or corrections revoke existing links.\n\nReview the fields, complete missing details, and sign only after checking the draft.\n\n${visibility}`;
+          } else response = visibility + "\n\n" + draft;
+        }
+      } else if (["confirm", "flag", "confirmations"].includes(name)) {
+        if (!issue.pull_request) {await send("Use team review commands on the PR containing the report."); return;}
+        const match = args.match(/^([a-f0-9]{16})(?:\s+([\s\S]+))?$/);
+        if (!match || (name === "flag" ? !match[2]?.trim() || match[2].length > 1000 : !!match[2])) {
+          await send("Use /confirm <report-id>, /flag <report-id> <reason up to 1000 characters>, or /confirmations <report-id>. Copy the ID from a report in this PR. Responses follow repository visibility."); return;
+        }
+        response = name === "confirmations" ? confirmationSummary(db, repo, issue.number, match[1])
+          : recordConfirmation(db, repo, issue.number, match[1], login, name === "flag" ? "flagged" : "confirmed", match[2]?.trim());
       } else if (name === "backfill") {
         if (args) { await send("Use /backfill without arguments."); return; }
         if (Date.now() - (lastBackfill.get(repo) ?? 0) < 300000) { await send("A backfill ran recently. Please wait five minutes before requesting another."); return; }
@@ -177,7 +207,13 @@ export function registerApp(app: Probot, db: Database.Database) {
   });
 }
 
-export default (app: Probot) => {
+export default (app: Probot, options?: {addHandler: (handler: ReturnType<typeof downloadHandler>) => void}) => {
   if (process.env.NODE_ENV === "production" && !process.env.DATABASE_PATH) throw new Error("Set DATABASE_PATH to a persistent volume in production.");
-  registerApp(app, openDatabase());
+  const db = openDatabase();
+  db.prepare("DELETE FROM declaration_download WHERE expires_at <= ?").run(Date.now());
+  downloadBase(); // Fail early on invalid origin configuration.
+  options?.addHandler(downloadHandler(db));
+  const cleanup = setInterval(() => db.prepare("DELETE FROM declaration_download WHERE expires_at <= ?").run(Date.now()), 60_000);
+  cleanup.unref();
+  registerApp(app, db);
 };

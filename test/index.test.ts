@@ -37,7 +37,7 @@ beforeEach(() => {
   const app = {on: (events: string | string[], fn: any) => { for (const event of [events].flat()) handlers[event] = fn; }};
   registerApp(app as unknown as Probot, db);
 });
-afterEach(() => {db.close(); nock.cleanAll(); nock.enableNetConnect();});
+afterEach(() => {db.close(); nock.cleanAll(); nock.enableNetConnect(); vi.unstubAllEnvs();});
 
 describe("command trust and ownership", () => {
   test.each(["NONE", "CONTRIBUTOR", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR"])("ignores %s without writing or replying", async association => {
@@ -72,6 +72,32 @@ describe("command trust and ownership", () => {
 });
 
 describe("visibility and identity", () => {
+  test("Word commands enforce visibility, revoke old files on edits, and guide missing config", async () => {
+    vi.stubEnv("PUBLIC_BASE_URL", "");
+    const setup = context("/declaration word"); await command(setup);
+    expect(bodyOf(setup)).toContain("Word download setup needed");
+    vi.stubEnv("PUBLIC_BASE_URL", "http://localhost:3000");
+    const denied = context("/declaration word", {repository: {full_name: "team/project", name:"project", owner:{login:"team"}, private:false}});
+    await command(denied); expect(count("declaration_download")).toBe(0);
+    await command(context("/ai Tool: Codex"));
+    const word = context("/declaration word bounded"); await command(word);
+    expect(bodyOf(word)).toContain("Download editable Word draft"); expect(count("declaration_download")).toBe(1);
+    const edit = context("/ai edit 1 Tool: Codex\nPurpose: hints"); await command(edit);
+    expect(count("declaration_download")).toBe(0);
+    expect(bodyOf(edit)).toContain("**Still needed:** Output, Decision, Influence");
+  });
+  test("team commands require a published report in the current PR", async () => {
+    const initial = context("/report"); await command(initial);
+    const id = bodyOf(initial).match(/Report: `([a-f0-9]{16})`/)![1];
+    const confirm = context(`/confirm ${id}`); await command(confirm); expect(bodyOf(confirm)).toContain("Confirmed");
+    const flag = context(`/flag ${id} missing my tests`); flag.payload.comment.user.login = "bob";
+    await command(flag); expect(bodyOf(flag)).toContain("Flagged");
+    const wrongPr = context(`/confirm ${id}`); wrongPr.payload.issue.number = 9; await command(wrongPr);
+    expect(bodyOf(wrongPr)).toContain("not found");
+    await command(context("/ai Tool: Codex"));
+    const stale = context(`/confirm ${id}`); await command(stale); expect(bodyOf(stale)).toContain("out of date");
+    const issue = context(`/confirm ${id}`, {issue: {number: 1}}); await command(issue); expect(bodyOf(issue)).toContain("on the PR");
+  });
   test("repository weights are admin-controlled, isolated, validated and resettable", async () => {
     const denied = context("/weights 50 20 30");
     denied.octokit.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({data: {permission: "write"}});
@@ -92,7 +118,7 @@ describe("visibility and identity", () => {
     const ctx = context(text); ctx.payload.repository.private = false; await command(ctx);
     expect(bodyOf(ctx)).toContain("repeat your command with --public");
     const publicCtx = context(text + " --public"); publicCtx.payload.repository.private = false; await command(publicCtx);
-    expect(bodyOf(publicCtx)).toContain("**Visibility:");
+    expect(bodyOf(publicCtx)).toContain("_Public output:");
   });
   test("requires PR and rejects unrecognized flags", async () => {
     const ctx = context("/report", {issue: {number: 1}}); await command(ctx); expect(bodyOf(ctx)).toContain("on a pull request");
@@ -153,7 +179,7 @@ test("actual Probot webhook dispatch posts a declaration receipt using mocked Gi
     Octokit: ProbotOctokit.defaults({retry: {enabled: false}, throttle: {enabled: false}})});
   registerApp(probot, db);
   const mock = nock("https://api.github.com").post("/app/installations/2/access_tokens").reply(200, {token: "test"})
-    .post("/repos/hiimbex/testing-things/issues/1/comments", body => body.body.includes("AI use recorded as entry")).reply(201, {});
+    .post("/repos/hiimbex/testing-things/issues/1/comments", body => body.body.includes("AI use saved")).reply(201, {});
   await probot.receive({id: "integration", name: "issue_comment", payload: {...issueFixture, action: "created",
     repository: {...issueFixture.repository, full_name: "hiimbex/testing-things", private: true},
     comment: {id: 9001, body: "/ai Used hints", author_association: "COLLABORATOR", user: {login: "alice", type: "User"}}} as any});

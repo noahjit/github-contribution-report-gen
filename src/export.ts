@@ -1,6 +1,7 @@
 import {writeFileSync} from "node:fs";
 import Database from "better-sqlite3";
 import {contributionReport, declarationDraft} from "./reports.js";
+import {declarationWord} from "./word.js";
 
 const [kind, repo, output, login, format] = process.argv.slice(2);
 if (!['report', 'declaration'].includes(kind) || !repo?.includes('/') || !output ||
@@ -11,7 +12,9 @@ if (!['report', 'declaration'].includes(kind) || !repo?.includes('/') || !output
   const db = new Database(process.env.DATABASE_PATH ?? 'data.sqlite', {readonly: true, fileMustExist: true});
   try {
     const body = kind === 'report' ? contributionReport(db, repo) : declarationDraft(db, repo, login, format === 'bounded');
-    writeFileSync(output, body + '\n', {encoding: 'utf8', flag: 'wx', mode: 0o600});
-    console.log('Local Markdown export created. No GitHub comment was posted.');
+    if (output.toLowerCase().endsWith('.docx') && kind !== 'declaration') throw new Error('Word export supports declarations only. Use .md for reports.');
+    const content = output.toLowerCase().endsWith('.docx') ? await declarationWord(body) : body + '\n';
+    writeFileSync(output, content, {flag: 'wx', mode: 0o600});
+    console.log('Local export created. No GitHub comment was posted.');
   } finally {db.close();}
 }

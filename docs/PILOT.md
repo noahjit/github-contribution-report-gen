@@ -17,3 +17,11 @@ Use a consenting group and a private test repository first. Tell participants wh
 Set the support contact and actual retention policy, complete the deployment smoke tests and review the documented scale/rename limitations. Add a sanitized demo screenshot and installation URL to the README. Make the production app public only when ready.
 
 Marketplace is optional and is not submitted. A future submission requires checking current GitHub requirements, preparing a logo, feature image and screenshots, and completing GitHub's review. Do not promise listing approval or monetize before the pilot establishes value.
+
+## New feature trial
+
+1. Post `/ai Tool: Codex` and check the missing-fields prompt. Replace it using `/ai edit <id>` with all five labeled fields.
+2. Request `/declaration word bounded` (add `--public` on a public repo), follow the link, and open the downloaded DOCX in Word. Check multiple interaction blocks, missing-field placeholders, editable personal details and unchecked declarations.
+3. Wait for expiry or edit the entry; check the old link stops working. Request a fresh link.
+4. Request `/report`, then have different teammates use `/confirm <id>` and `/flag <id> missing test work`. Check `/confirmations <id>` lists both responses.
+5. Change weights or add evidence, then try confirming the old ID. It must ask for a fresh report and renewed review.

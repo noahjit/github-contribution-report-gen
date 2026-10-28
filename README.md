@@ -79,3 +79,29 @@ The estimate excludes known `[bot]` logins and `unknown` authors. Unlinked email
 ### Team-editable weights
 
 Comment `/weights` on an issue or PR to view your repository's weights. Repository admins can use `/weights 50 20 30` to set relative weights for merged PRs, commits and reviews, or `/weights reset` to restore the operator's ACTIVITY_WEIGHTS defaults. Weights need not total 100; they are normalized automatically. Changes persist across restarts, apply only to this repository, and are deleted when repository access is removed. Non-admin collaborators can view weights but cannot change them. Generate a fresh report after changing weights; old reports remain snapshots.
+
+## Word downloads and team review
+
+On a PR, request `/declaration word` or `/declaration word bounded`. On public repositories add `--public`. The bot returns a Word download link valid for 15 minutes. It contains only the requesting user's declaration entries and attributed trailer evidence, with editable student details, incomplete fields and unchecked assertions. It is an adapted draft, not an exact copy of a university's official Word template.
+
+Set `PUBLIC_BASE_URL=http://localhost:3000` for use on the same computer as the bot. For teammates use the deployed app's HTTPS origin, e.g. `https://your-app.onrender.com`. Smee forwards webhook requests; a smee URL cannot serve these files. A link is a bearer credential: anyone with it can download, even for a private repo. Do not share links beyond the intended recipients. The token is kept in the URL fragment and sent by the download page in a POST body, keeping it out of ordinary URL access logs. Do not enable request-body capture in a proxy or monitoring service. Downloads are served with no-store caching headers.
+
+Saved download files expire after 15 minutes and are purged at startup/on access and every minute while running. Up to 10 exports per repo are kept; requesting more revokes older links. New AI entries, corrections and deletions revoke existing links for that repository. Removal/uninstall deletes downloads too. Files already saved by a user cannot be revoked. The browser page clears the token from its address bar; keep that page open until clicking Download, or reopen the original link if needed.
+
+Without a reachable app URL, export privately from the operator's machine:
+
+```text
+npm run export -- declaration owner/repo exports/declaration.docx login bounded
+```
+
+Create the exports directory first and set DATABASE_PATH as described above. No Word or LibreOffice installation is required for the app to generate files. The initial implementation verifies document structure and text; visual pagination QA was unavailable locally because LibreOffice was not installed.
+
+AI receipts now list missing Tool, Purpose, Output, Decision or Influence fields and provide the edit syntax. Entries are saved even when incomplete. Editing replaces the complete entry: include the fields you want to retain. Long evidence sections are collapsible; report estimates appear first.
+
+Every `/report` now includes a report ID and team-review commands:
+
+- `/confirm <report-id>` records that you reviewed that report.
+- `/flag <report-id> <reason>` raises a concern (up to 1,000 characters).
+- `/confirmations <report-id>` shows the latest responses.
+
+These commands use the existing owner/member/collaborator authorization rule and must be posted in the PR containing the report. Each person has one response per snapshot and can change it. They record individual acknowledgements, not automatic unanimous team approval, signatures or university compliance. Report IDs identify repository, PR and report content. Changes to evidence, aliases or weights that alter the report require a fresh report and renewed review. Old responses are displayed as out of date; previously posted GitHub comments are not edited automatically. Confirmations and flag notes have repository visibility and are deleted when the app loses access. Snapshot storage retains identifiers only, not copies of declaration text.

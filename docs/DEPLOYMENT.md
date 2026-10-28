@@ -16,3 +16,7 @@ Docker locally: build with `docker build -t github-contrib-report .`, create a n
 The container build is checked by CI but was not executed locally in the initial implementation session. GitHub Actions needs the changes committed and pushed before it can run remotely. No production registration, hosting account, billing, or deployment has been completed.
 
 References: https://probot.github.io/docs/deployment/ ; https://render.com/docs/free ; https://docs.github.com/en/webhooks/webhook-events-and-payloads
+
+## Word download origin
+
+Set PUBLIC_BASE_URL to the deployed service's HTTPS origin (no path, credentials, query or fragment), e.g. https://YOUR-SERVICE.onrender.com. For a same-computer development test, http://localhost:3000 is allowed. Do not use smee as this origin. Word links expire in 15 minutes and grant access to whoever holds the link. A local-only link works for the bot operator but not teammates on other machines. Check /declarations loads and test a /declaration word bounded command after deployment. Ensure proxy/observability settings do not capture download POST bodies.

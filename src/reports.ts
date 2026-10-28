@@ -70,7 +70,15 @@ export function contributionReport(db: Database.Database, repo: string): string 
   if (!ev.length) lines.push("No matching trailers recorded.");
   for (const e of ev) lines.push(`- ${safe(e.sha)}${e.pr ? `, PR #${e.pr}` : ""}: ${safe(person(db, repo, e.author))}; ${safe(e.names)}`);
   lines.push("", "_Coverage: default-branch history scanned by backfill, plus observed pushes on all branches since installation. PR commit evidence is listed separately and is not added to observed commit totals. Squash/rebase history can change counts. Original PR commits are retained as historical evidence even after force pushes; GitHub limits the PR commits API to 250 commits. Trailers are unverified indicators, not proof of AI use or a complete AI-use detector._");
-  return lines.join("\n");
+  const body = lines.join("\n");
+  const start = body.indexOf("### Estimated share of recorded GitHub activity");
+  const end = body.indexOf("### Declared AI use", start);
+  const firstDetails = body.indexOf("### Pull requests");
+  const intro = body.slice(0, firstDetails);
+  const methodologyStart = body.indexOf("_Estimate =", start);
+  const estimate = body.slice(start, methodologyStart);
+  const details = body.slice(methodologyStart, end) + "\n" + body.slice(firstDetails, start) + body.slice(end);
+  return intro + estimate + "_Estimate of recorded activity only; see methodology and coverage below._\n\n<details>\n<summary>Activity counts, methodology, AI evidence and coverage</summary>\n\n" + details + "\n\n</details>";
 }
 
 export function declarationDraft(db: Database.Database, repo: string, login: string, bounded = false): string {
@@ -104,10 +112,10 @@ export function declarationDraft(db: Database.Database, repo: string, login: str
       "2. **Purpose of use:** " + field("purpose", "[specific task and permitted purpose]"),
       "3. **What the AI produced:** " + field("output", "[describe the actual output]"),
       "4. **What I did with that output:** " + field("decision", "[what you accepted, rejected, revised or rewrote, and why]"),
-      "5. **How it influenced the final submission:** " + field("influence", "[affected section or stage, and extent]"), "", "Recorded notes:");
+      "5. **How it influenced the final submission:** " + field("influence", "[affected section or stage, and extent]"), "", "<details>", "<summary>Original recorded notes</summary>", "");
     if (!entry) lines.push("- No self-reported entries available. Complete from your own records.");
     else lines.push(`- Entry ${entry.id}, #${entry.number}: ${safe(entry.details)}`);
-    lines.push("");
+    lines.push("", "</details>", "");
     }
   }
   lines.push("### Supporting trailer evidence", "These names do not establish purpose, permitted scope, or what you accepted.");

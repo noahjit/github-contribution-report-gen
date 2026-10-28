@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "docx": "9.5.1",
     "probot": "^14.3.2"
   },
   "devDependencies": {

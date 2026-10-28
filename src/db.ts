@@ -6,6 +6,18 @@ db.pragma("busy_timeout = 5000");
 db.pragma("secure_delete = ON");
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS report_snapshot (
+  repo TEXT NOT NULL, report_id TEXT NOT NULL, number INTEGER NOT NULL,
+  PRIMARY KEY(repo, report_id)
+);
+CREATE TABLE IF NOT EXISTS team_confirmation (
+  repo TEXT NOT NULL, report_id TEXT NOT NULL, login TEXT NOT NULL, status TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(repo, report_id, login)
+);
+CREATE TABLE IF NOT EXISTS declaration_download (
+  repo TEXT NOT NULL, token_hash TEXT PRIMARY KEY, document BLOB NOT NULL, expires_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pull_request (
   repo TEXT NOT NULL,
   number INTEGER NOT NULL,
@@ -73,7 +85,7 @@ return db;
 
 export function deleteRepository(db: Database.Database, repo: string) {
   db.transaction(() => {
-    for (const table of ["pull_request", "ai_declaration", "commit_record", "review", "identity_alias", "pr_commit", "processed_command", "repository_weights"]) {
+    for (const table of ["pull_request", "ai_declaration", "commit_record", "review", "identity_alias", "pr_commit", "processed_command", "repository_weights", "report_snapshot", "team_confirmation", "declaration_download"]) {
       db.prepare(`DELETE FROM ${table} WHERE repo = ?`).run(repo);
     }
     db.prepare("UPDATE repository_installation SET active = 0 WHERE repo = ?").run(repo);
