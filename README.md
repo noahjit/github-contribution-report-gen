@@ -1,33 +1,69 @@
-# github-contrib-report
+# GitHub contribution report
 
-> A GitHub App built with [Probot](https://github.com/probot/probot) that An app that gives unbiased contribution reports on GitHub Repos.
+A Probot app that records repository activity and AI-use evidence, and prepares editable declaration drafts. Counts are not an objective measure of effort or quality. AI trailers are unverified hints, not an AI detector.
 
-## Setup
+## Run locally
 
-```sh
-# Install dependencies
-npm install
+Use Node 22 or 24. Run `npm ci`, `npm run check`, then `npm start`. Copy `.env.example` to `.env` and configure your development app credentials. Never commit credentials or databases. The existing database is migrated additively on startup; stop the old app and back up its database before upgrading. Tests use isolated in-memory databases.
 
-# Run the bot
-npm start
+Configure your GitHub App with Contents read, Metadata read, Issues write, and Pull requests write. Subscribe to Issue comment, Pull request, Pull request review, and Push. Installation lifecycle events are automatic. Changing app.yml alone does not change an existing app's settings.
+
+## Commands
+
+Only OWNER, MEMBER and COLLABORATOR comments are accepted. Bots are ignored. Commands must begin the comment and match an exact command name.
+
+| Command | Purpose |
+|---|---|
+| `/ai <details>` | Record your AI use; receipt includes its entry ID |
+| `/ai edit <id> <details>` | Correct your own entry in the original issue/PR |
+| `/ai remove <id>` | Delete your own entry in the original issue/PR |
+| `/report` | Repository activity report, on a PR |
+| `/declaration` | Your editable AI declaration, on a PR |
+| `/declaration bounded` | Draft aligned with the supplied Bounded Process form |
+| `/backfill` | Rescan history, with a five-minute per-repo cooldown |
+| `/alias <email> <login>` | Map an unlinked email to a GitHub login; admins only |
+| `/alias remove <email>` | Remove a mapping; admins only |
+| `/help` | Command reference |
+
+On public repos, `/report` and `/declaration` require `--public`. That publishes the output to everyone. A PR comment is never team-private on a public repo. AI commands and alias emails also have the repository's visibility. Do not put confidential material or student IDs in public comments.
+
+Example comment:
+
+```text
+/ai Tool: Codex
+Purpose: debugging hints for input validation.
+Output: suggested three edge cases.
+Decision: rejected one, wrote my own validation, tested the remaining two.
+Influence: validation tests in PR #12.
 ```
 
-## Docker
+Then request `/declaration bounded` (add `--public` on a public repo). Copy the draft into the official form and complete the five reflection fields, personal details and signature yourself. No compliance assertions are checked automatically. The supplied form references an absent Part E: ask your assessor how to handle no-AI declarations. Different courses can use the general draft; the app does not determine what AI use an assessment permits.
 
-```sh
-# 1. Build container
-docker build -t github-contrib-report .
+## Private local exports
 
-# 2. Start container
-docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> github-contrib-report
+After building and starting the updated app once to migrate its database, the operator can export without posting to GitHub:
+
+```text
+npm run export -- report owner/repo exports/report.md
+npm run export -- declaration owner/repo exports/declaration.md login bounded
 ```
 
-## Contributing
+Create the exports folder first. Set DATABASE_PATH to the existing database. Export refuses to overwrite an existing file. Protect the output directory and share only with authorized recipients. Windows permissions are inherited from the containing directory. Outputs exceeding 55,000 characters are not posted; use this export instead.
 
-If you have suggestions for how github-contrib-report could be improved, or want to report a bug, open an issue! We'd love all and any contributions.
+## Coverage and operational limits
 
-For more, check out the [Contributing Guide](CONTRIBUTING.md).
+Backfill scans default-branch commits, all PRs and reviews, and original PR commits. Pushes add observed commits across all branches. Original PR commits retain trailer evidence through squash merges and are reported separately, not added to totals. GitHub's PR commits endpoint is limited to 250 commits; force-pushed historical evidence is retained. Counts may differ across squash/rebase workflows. Backfill cannot recreate old `/ai` declarations, off-platform AI use, or lost webhooks.
 
-## License
+Email aliases are repository-scoped administrative assertions and only affect unlinked commit author emails. Review counts count review events, not unique reviewers. A failed scan can leave partial progress; rerunning is safe. Duplicate command deliveries do not duplicate stored declarations. If posting fails after saving a command, use a new comment to request a report; the original delivery is not reposted automatically.
 
-[ISC](LICENSE) © 2026 Noah Arrowsmith
+Deploy one process/replica: handlers run in FIFO order so uninstall cleanup follows an in-flight scan. Large scans delay other events; this is suitable for a small pilot, not a large multi-tenant service. Cooldowns reset on restart. GitHub does not automatically redeliver every failed webhook: inspect deliveries and redeliver failures after fixing the cause. Repository renames/transfers and out-of-order installation selection events need operator reconciliation; repository keys are full names. Reconcile before a production rollout involving these operations.
+
+See [deployment](docs/DEPLOYMENT.md), [privacy](PRIVACY.md) and [pilot checklist](docs/PILOT.md).
+
+## Declaration autofill
+
+Use `Tool:`, `Purpose:`, `Output:`, `Decision:` and `Influence:` on separate lines in an `/ai` comment (see the example above). Labels are case-insensitive. Purpose, Output, Decision and Influence accept continuation lines. Record one tool per entry; use separate comments for different tools. Repeated labels preserve both values.
+
+Both `/declaration` and `/declaration bounded` fill the corresponding fields using your exact descriptions, with entry IDs and issue/PR references. Missing fields remain placeholders for each entry; ordinary unstructured descriptions remain in Recorded notes. Trailer names never populate personal reflections. Existing structured entries work without re-entering them. Use `/ai edit <id>` followed by the complete updated labeled details to correct an entry, then request a new draft. Previously posted drafts do not change.
+
+Multiple entries now appear as separate interaction blocks within each tool section. Tool grouping ignores capitalization, preserving different version labels. See [a fictional two-entry declaration](docs/DEMO_DECLARATION.md). Run a fresh declaration command after new entries, corrections or removals.

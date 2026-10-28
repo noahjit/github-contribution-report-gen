@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: github-contrib-report
+    runtime: docker
+    plan: starter
+    numInstances: 1
+    healthCheckPath: /ping
+    disk:
+      name: contribution-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /data/data.sqlite
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_ID
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false

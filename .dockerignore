@@ -1,12 +1,8 @@
-**/node_modules/
-**/.git
-**/README.md
-**/LICENSE
-**/.vscode
-**/npm-debug.log
-**/coverage
-**/.env
-**/.editorconfig
-**/dist
-**/*.pem
-Dockerfile
+# Only application inputs are allowed in the Docker build context.
+**
+!package.json
+!package-lock.json
+!tsconfig.json
+!src/
+!src/**
+!Dockerfile

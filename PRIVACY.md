@@ -1,0 +1,9 @@
+# Privacy statement
+
+This self-hosted app stores repository names, installation associations, PR metadata (including titles), commit hashes, author logins or fallback emails, timestamps, AI trailer names, review metadata, identity aliases and user-supplied AI declaration text. Declaration text may itself contain personal information. It does not fetch or store source file contents. GitHub webhooks and API responses are processed transiently and may contain additional metadata and commit messages.
+
+Data is used to prepare contribution evidence and editable AI declarations. It is not sent to an AI provider. The operator and hosting provider can access the database. Reports posted on GitHub follow repository visibility; public repository comments are public. Local exports and backups are the operator's responsibility.
+
+Users may correct or remove their own declarations with /ai edit and /ai remove. These commands do not erase the original GitHub comment or previously posted reports; delete those separately using GitHub. Removing repository access or uninstalling the app deletes its contribution rows, aliases, declarations and command receipts when the corresponding webhook is processed. Minimal lifecycle identifiers are retained to reject late deliveries (removed repository name and installation ID, or deleted installation ID). Secure-delete is enabled; backup copies and provider snapshots are not erased by a SQL deletion.
+
+Operators must set a support contact, hosting region, backup/log retention period and deletion process before offering a public service. These are not yet configured for a hosted deployment. Users should contact the operator through the installation's published support channel; do not post sensitive data in public issues. No public hosted-service privacy commitments are implied by this template.

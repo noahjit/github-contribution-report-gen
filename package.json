@@ -2,7 +2,7 @@
   "name": "github-contrib-report",
   "version": "1.0.0",
   "private": true,
-  "description": "An app that gives unbiased contribution reports on GitHub Repos.",
+  "description": "GitHub contribution evidence and editable AI-use declaration drafts.",
   "author": "Noah Arrowsmith",
   "license": "ISC",
   "homepage": "https://github.com//",
@@ -14,7 +14,10 @@
   "scripts": {
     "build": "tsc",
     "start": "probot run ./lib/index.js",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run build && npm test",
+    "export": "node lib/export.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
