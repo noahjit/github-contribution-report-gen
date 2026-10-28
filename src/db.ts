@@ -6,6 +6,10 @@ db.pragma("busy_timeout = 5000");
 db.pragma("secure_delete = ON");
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS dashboard_session (
+  token_hash TEXT PRIMARY KEY, login TEXT NOT NULL, kind TEXT NOT NULL,
+  csrf TEXT NOT NULL, expires_at INTEGER NOT NULL, bootstrap INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS report_snapshot (
   repo TEXT NOT NULL, report_id TEXT NOT NULL, number INTEGER NOT NULL,
   PRIMARY KEY(repo, report_id)

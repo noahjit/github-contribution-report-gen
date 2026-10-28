@@ -10,6 +10,7 @@ import {missingDetailPrompt} from "./declaration-fields.js";
 import {publishSnapshot, recordConfirmation, confirmationSummary} from "./confirmations.js";
 import {createDownload, downloadBase, downloadHandler} from "./downloads.js";
 import {declarationWord} from "./word.js";
+import {dashboardHandler} from "./dashboard.js";
 
 const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const help = `Commands must occupy a new comment and come from a repository owner, member or collaborator.
@@ -26,6 +27,7 @@ const help = `Commands must occupy a new comment and come from a repository owne
 - /confirm <report-id> — acknowledge a reviewed report snapshot.
 - /flag <report-id> <reason> — flag missing or incorrect work.
 - /confirmations <report-id> — view individual team responses.
+- /dashboard — open the web dashboard; local operator login: npm run dashboard.
 
 Reports and drafts are visible to everyone who can access this repository. On public repositories they require --public, for example /declaration bounded --public. Never put sensitive information in public commands.`;
 
@@ -114,7 +116,7 @@ export function registerApp(app: Probot, db: Database.Database) {
   }));
   app.on("issue_comment.created", context => {
     const {comment, issue, repository, installation} = context.payload;
-    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help|weights|confirm|flag|confirmations)(?:\s+([\s\S]*))?$/);
+    const command = comment.body.trim().match(/^\/(ai|report|declaration|backfill|alias|help|weights|confirm|flag|confirmations|dashboard)(?:\s+([\s\S]*))?$/);
     if (!command || !comment.user || comment.user.type === "Bot" || !trusted.has(comment.author_association) || !installation) return Promise.resolve();
     const login = comment.user.login;
     return run(context, async () => {
@@ -176,6 +178,9 @@ export function registerApp(app: Probot, db: Database.Database) {
         const result = await backfillRepo(db, context.octokit, repository.owner.login, repository.name, context.log);
         lastBackfill.set(repo, Date.now());
         response = `Backfill complete: ${result.commits} commits, ${result.prs} PRs and ${result.reviews} reviews scanned. AI command history is not reconstructed.`;
+      } else if (name === "dashboard") {
+        const base=downloadBase()??"http://localhost:3000";
+        response=`### Project dashboard\n\n[Open the dashboard](${base}/dashboard)\n\nSign in with GitHub when configured, or run \`npm run dashboard\` in the app's terminal for a private operator sign-in link. A localhost dashboard works only on the computer running the app. Never post operator sign-in links in repository comments.`;
       } else if (name === "weights") {
         if (args) {
           let weights;
@@ -213,7 +218,11 @@ export default (app: Probot, options?: {addHandler: (handler: ReturnType<typeof 
   db.prepare("DELETE FROM declaration_download WHERE expires_at <= ?").run(Date.now());
   downloadBase(); // Fail early on invalid origin configuration.
   options?.addHandler(downloadHandler(db));
-  const cleanup = setInterval(() => db.prepare("DELETE FROM declaration_download WHERE expires_at <= ?").run(Date.now()), 60_000);
+  options?.addHandler(dashboardHandler(db, {base:downloadBase()??"http://localhost:3000", octokit:id=>app.auth(id), clientId:process.env.GITHUB_CLIENT_ID, clientSecret:process.env.GITHUB_CLIENT_SECRET}));
+  const cleanup = setInterval(() => {
+    db.prepare("DELETE FROM declaration_download WHERE expires_at <= ?").run(Date.now());
+    db.prepare("DELETE FROM dashboard_session WHERE expires_at <= ?").run(Date.now());
+  }, 60_000);
   cleanup.unref();
   registerApp(app, db);
 };

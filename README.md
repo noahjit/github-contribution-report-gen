@@ -105,3 +105,15 @@ Every `/report` now includes a report ID and team-review commands:
 - `/confirmations <report-id>` shows the latest responses.
 
 These commands use the existing owner/member/collaborator authorization rule and must be posted in the PR containing the report. Each person has one response per snapshot and can change it. They record individual acknowledgements, not automatic unanimous team approval, signatures or university compliance. Report IDs identify repository, PR and report content. Changes to evidence, aliases or weights that alter the report require a fresh report and renewed review. Old responses are displayed as out of date; previously posted GitHub comments are not edited automatically. Confirmations and flag notes have repository visibility and are deleted when the app loses access. Snapshot storage retains identifiers only, not copies of declaration text.
+
+## Web dashboard
+
+The bot now serves a dashboard at `/dashboard` on the same server. It includes activity summaries, reports, declaration browsing and Word downloads, team review, and editable weights with a live preview.
+
+For local operator access:
+
+1. Restart the updated bot with `npm start`.
+2. Open a second terminal in the project folder and run `npm run dashboard`.
+3. Open the private link printed in that terminal. It works once and expires in 10 minutes. The signed-in session lasts eight hours.
+
+The operator can inspect installed repositories, change weights and export declarations. It cannot impersonate a teammate to edit personal declarations or confirm reports. Team members can use GitHub sign-in after configuring the app's client credentials and callback URL. See [dashboard setup and permissions](docs/DASHBOARD.md). `/dashboard` in a repository comment returns the dashboard's public sign-in address, never an operator credential.
