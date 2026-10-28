@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { declarationFields, type Field } from "./declaration-fields.js";
+import {activityShares, configuredWeights} from "./activity-share.js";
 
 export function safe(value: unknown): string {
   return String(value ?? "").replace(/[\\`*_\[\]#]/g, "\\$&")
@@ -45,6 +46,21 @@ export function contributionReport(db: Database.Database, repo: string): string 
     ON p.repo = r.repo AND p.number = r.pr_number WHERE r.repo = ? AND r.reviewer != p.author
     GROUP BY reviewer ORDER BY reviewer`).all(repo) as {reviewer: string; reviews: number; approvals: number; changes: number}[];
   for (const r of reviews) lines.push(`| ${safe(r.reviewer)} | ${r.reviews} | ${r.approvals} | ${r.changes} |`);
+  const weights = configuredWeights();
+  const estimated = activityShares([
+    ...prs.map(p => ({author: p.author, merged: p.merged, commits: 0, reviews: 0})),
+    ...[...totals].map(([author, c]) => ({author, merged: 0, commits: c.commits, reviews: 0})),
+    ...reviews.map(r => ({author: r.reviewer, merged: 0, commits: 0, reviews: r.reviews})),
+  ], weights);
+  lines.push("", "### Estimated share of recorded GitHub activity", "",
+    `Configured weights (merged PRs / commits / reviews): ${weights.join(" / ")}.`,
+    `Effective weights after redistributing empty categories: ${estimated.effective.map(w => (w * 100).toFixed(1) + "%").join(" / ")}.`, "");
+  if (!estimated.available) lines.push("Not enough activity in the weighted categories to calculate percentages.");
+  else {
+    lines.push("| Contributor | Share of merged PRs | Share of commits | Share of reviews | Estimated activity share |", "|---|---:|---:|---:|---:|");
+    for (const a of estimated.rows) lines.push(`| ${safe(a.author)} | ${a.shares.map(s => s === null ? "N/A" : (s * 100).toFixed(1) + "%").join(" | ")} | ${(a.units / 10).toFixed(1)}% |`);
+  }
+  lines.push("", "_Estimate = sum of each category share multiplied by its effective weight. Displayed estimates total 100.0% using rounding allocation. Known [bot] accounts and unknown authors are excluded from this estimate; unlinked emails remain separate until aliased. AI declarations and trailers do not affect scores. PRs and commits overlap, reviews count events, and squash merges or missing history can change results. Off-platform work, difficulty, effort and quality are not measured; this estimate is not a grade or a definitive contribution percentage._");
   lines.push("", "### Declared AI use");
   const ds = declarations(db, repo);
   if (!ds.length) lines.push("No declarations recorded. This does not establish that no AI was used.");

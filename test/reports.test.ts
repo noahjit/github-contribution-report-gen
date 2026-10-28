@@ -20,6 +20,9 @@ test("reports merge email aliases, deduplicate commits, separate squash evidence
   const report = contributionReport(db, "a/b");
   expect(report).toContain("| alice | 2 | 1 |"); expect(report).toContain("| bob | 1 | 1 | 0 |");
   expect(report).toContain("original, PR #1"); expect(report).not.toContain("<script>"); expect(report).not.toContain("@team");
+  expect(report).toContain("| alice | 100.0% | 100.0% | 0.0% | 70.0% |");
+  expect(report).toContain("| bob | 0.0% | 0.0% | 100.0% | 30.0% |");
+  expect(contributionReport(db, "other/repo")).toContain("Not enough activity");
   expect(contributionReport(db, "other/repo")).not.toContain("original, PR #1");
 });
 test("bounded draft has the five reflection fields, only own records and no signed assertions", () => {

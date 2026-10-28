@@ -67,3 +67,11 @@ Use `Tool:`, `Purpose:`, `Output:`, `Decision:` and `Influence:` on separate lin
 Both `/declaration` and `/declaration bounded` fill the corresponding fields using your exact descriptions, with entry IDs and issue/PR references. Missing fields remain placeholders for each entry; ordinary unstructured descriptions remain in Recorded notes. Trailer names never populate personal reflections. Existing structured entries work without re-entering them. Use `/ai edit <id>` followed by the complete updated labeled details to correct an entry, then request a new draft. Previously posted drafts do not change.
 
 Multiple entries now appear as separate interaction blocks within each tool section. Tool grouping ignores capitalization, preserving different version labels. See [a fictional two-entry declaration](docs/DEMO_DECLARATION.md). Run a fresh declaration command after new entries, corrections or removals.
+
+## Estimated activity percentages
+
+`/report` includes an estimated share of recorded GitHub activity. Defaults are 40% merged PRs, 30% observed commits and 30% review events on other people's PRs. Each person's share of each category is multiplied by its effective weight and added. Empty categories redistribute their weight proportionally; if no positively weighted category has activity, no estimate is shown. Rounded estimates total 100.0% using largest-remainder allocation (alphabetical tie breaks).
+
+The operator can set `ACTIVITY_WEIGHTS=40,30,30` in `.env` or host environment settings, then restart. Values are relative weights in the order merged PRs, commits, reviews. Zero disables a category; at least one weight must be positive. Invalid settings produce a clear configuration error. Active weights and the category-share breakdown are shown in every report and local report export.
+
+The estimate excludes known `[bot]` logins and `unknown` authors. Unlinked emails remain separate until an administrator adds an alias. Raw activity tables remain available. AI declarations and trailer counts do not affect the estimate. PR and commit activity overlaps; repeated review events, branch history, squash merges and incomplete webhook coverage can affect the result. Use the breakdown to discuss recorded activity rather than assigning grades or assuming it measures effort or quality.
