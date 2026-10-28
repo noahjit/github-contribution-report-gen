@@ -1,5 +1,6 @@
 import {createServer} from "node:http";
-import {afterEach, beforeEach, expect, test} from "vitest";
+import {afterEach, beforeEach, expect, test, vi} from "vitest";
+import {runInNewContext} from "node:vm";
 import {openDatabase, deleteRepository} from "../src/db.js";
 import {createDownload, downloadBase, downloadHandler, DOWNLOAD_TTL} from "../src/downloads.js";
 import {declarationWord} from "../src/word.js";
@@ -31,7 +32,27 @@ test("HTTP download rejects invalid/expired tokens and revokes files on removal"
     const stored = db.prepare("SELECT token_hash FROM declaration_download").get() as {token_hash:string};
     expect(stored.token_hash).not.toBe(token);
     const page = await fetch(origin + "/declarations"); expect(page.headers.get("cache-control")).toBe("no-store");
-    expect(await page.text()).not.toContain(token);
+    const html = await page.text();
+    expect(html).not.toContain(token);
+    expect(html).not.toContain("<button");
+    // Run the returned script without clicking anything: navigation must start
+    // the authenticated download automatically, while retaining safe errors.
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)![1];
+    const clicked = vi.fn(), removed = vi.fn(), clearHistory = vi.fn();
+    const status = {textContent: ""};
+    const browser = {location: {hash: "#" + token, pathname: "/declarations"}, history: {replaceState: clearHistory},
+      document: {getElementById: () => status, createElement: () => ({click: clicked, remove: removed}), body: {appendChild: vi.fn()}},
+      URL: {createObjectURL: () => "blob:test", revokeObjectURL: vi.fn()}, setTimeout: () => 0,
+      fetch: vi.fn(() => post(token))};
+    await runInNewContext(script, browser);
+    expect(browser.fetch).toHaveBeenCalledWith("/declarations/download", expect.objectContaining({method: "POST", body: token}));
+    expect(clicked).toHaveBeenCalledOnce(); expect(removed).toHaveBeenCalledOnce();
+    expect(clearHistory).toHaveBeenCalledWith(null, "", "/declarations");
+    expect(status.textContent).toContain("Download started");
+    const failed = {...browser, fetch: vi.fn(async () => ({ok: false}))};
+    await runInNewContext(script, failed);
+    expect(status.textContent).toContain("expired or revoked");
+    expect(clicked).toHaveBeenCalledOnce();
     const good = await post(token); expect(good.status).toBe(200); expect(await good.text()).toBe("docx-bytes");
     expect((await post("bad")).status).toBe(404);
     const expired = createDownload(db, "a/b", Buffer.from("old"), origin, Date.now() - DOWNLOAD_TTL - 1);
