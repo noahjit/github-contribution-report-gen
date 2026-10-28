@@ -75,10 +75,19 @@ test("writes require origin and CSRF; admin weights persist and validate",async(
   expect((await api(q("weights"),admin,{weights:[60,20,20]},{"X-CSRF-Token":"wrong"})).status).toBe(403);
   expect((await api(q("weights"),admin,{weights:[60,20,20]},{Origin:"https://evil.example"})).status).toBe(403);
   expect((await api(q("weights"),admin,{weights:[0,0,0]})).status).toBe(400);
+  for(const weights of [[100,100,100],[60,30,20],[30,30,30],[101,-1,0],[33.333,33.333,33.334]]) {
+    const response=await api(q("weights"),admin,{weights});expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("totaling exactly 100%");
+  }
+  expect(db.prepare("SELECT 1 FROM repository_weights").get()).toBeUndefined();
   expect((await api(q("weights"),admin,{weights:[60,20,20]})).status).toBe(200);
   const data=await (await api(q("data"),admin)).json();expect(data.weights).toEqual([60,20,20]);
   expect(data.activity.rows[0].units).toBe(1000);
   expect((await api(q("weights"),admin,{reset:true})).status).toBe(200);
+  expect((await api(q("weights"),admin,{weights:[33.34,33.33,33.33]})).status).toBe(200);
+  expect((await api(q("weights"),admin,{weights:[100,0,0]})).status).toBe(200);
+  db.prepare("UPDATE repository_weights SET weights='1,1,1'").run();
+  expect((await (await api(q("data"),admin)).json()).percentages).toEqual([33.34,33.33,33.33]);
 });
 test("readers cannot modify settings or entries; writers edit only their own declarations",async()=>{
   const alice=user();permission.mockResolvedValue({data:{permission:"read"}});

@@ -3,7 +3,8 @@ import type {IncomingMessage, ServerResponse} from "node:http";
 import type {Context} from "probot";
 import {dashboardHtml, dashboardCss, dashboardJs} from "./dashboard-page.js";
 import {createDashboardSession, dashboardSession, sessionHash, secret, cookieValue, type DashboardSession} from "./dashboard-auth.js";
-import {repositoryWeights, configuredWeights, activityShares} from "./activity-share.js";
+import {repositoryWeights, activityShares} from "./activity-share.js";
+import {asPercentages, percentageWeights} from "./weight-percentages.js";
 import {contributionReport, declarationDraft} from "./reports.js";
 import {declarationFields} from "./declaration-fields.js";
 import {declarationWord} from "./word.js";
@@ -51,7 +52,7 @@ export function dashboardHandler(db: Database.Database, options: Options) {
     ], weights);
     const snapshots = db.prepare("SELECT report_id, number FROM report_snapshot WHERE repo = ? ORDER BY number DESC, rowid DESC LIMIT 30").all(repo) as {report_id:string;number:number}[];
     return {repo, access, canManage: access === "admin", canRespond: session.kind === "github" && ["admin","write"].includes(access),
-      canEdit: session.kind === "github" && ["admin","write"].includes(access), weights, activity, report: body, prs,
+      canEdit: session.kind === "github" && ["admin","write"].includes(access), weights, percentages:asPercentages(weights), activity, report: body, prs,
       declarations: declarations.map(d => ({...d, fields: declarationFields(d.details)})),
       counts:{prs:prs.length, merged:prs.filter(p=>p.merged).length, commits:commits.reduce((n,c)=>n+c.commits,0), reviews:reviews.reduce((n,r)=>n+r.reviews,0), declarations:declarations.length},
       snapshots: snapshots.map(s => ({...s, stale: reportId(repo,s.number,body)!==s.report_id,
@@ -124,8 +125,7 @@ export function dashboardHandler(db: Database.Database, options: Options) {
         if (access!=="admin") throw new HttpError(403,"Only repository admins can change weights.");
         if (input.reset === true) db.prepare("DELETE FROM repository_weights WHERE repo = ?").run(repo);
         else {
-          if (!Array.isArray(input.weights) || input.weights.some(v=>typeof v!=="number")) throw new HttpError(400,"Supply three numerical weights.");
-          let weights; try {weights=configuredWeights(input.weights.join(","));} catch {throw new HttpError(400,"Use three nonnegative weights with at least one positive value.");}
+          let weights; try {weights=percentageWeights(input.weights);} catch {throw new HttpError(400,"Enter three percentages between 0 and 100, with up to two decimal places, totaling exactly 100%.");}
           db.prepare("INSERT OR REPLACE INTO repository_weights VALUES (?, ?)").run(repo,weights.join(","));
         }
         json(200,{ok:true}); return true;

@@ -39,7 +39,7 @@ The app exposes only repositories with an active recorded installation. Operator
 - **Reports:** inspect/export current Markdown and create a snapshot associated with a tracked PR. Creating a dashboard snapshot does not post a GitHub comment.
 - **AI declarations:** filter by author, inspect missing fields, edit your own full entry when signed in with GitHub, and download Word directly. Operators choose an author; GitHub users export only their own declaration even if they browse other authors.
 - **Team review:** view current/stale snapshots and individual responses. GitHub writers/admins can confirm or flag the current version. Changes to the report require renewed review. Existing bot comments remain snapshots.
-- **Weights:** adjust relative values, inspect the preview, then save. Only admins/operators can save. Existing `/weights` commands read the same settings.
+- **Weights:** enter percentages totaling exactly 100%, inspect the preview, then save. The total and any correction needed appear beside the preview; Save is disabled for invalid totals. The API independently enforces the same rule. Existing relative command/environment values are converted to displayed percentages (rounded to hundredths totaling 100%). Only admins/operators can save. Existing `/weights` commands read the same settings.
 
 ## Operations
 

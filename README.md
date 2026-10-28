@@ -117,3 +117,5 @@ For local operator access:
 3. Open the private link printed in that terminal. It works once and expires in 10 minutes. The signed-in session lasts eight hours.
 
 The operator can inspect installed repositories, change weights and export declarations. It cannot impersonate a teammate to edit personal declarations or confirm reports. Team members can use GitHub sign-in after configuring the app's client credentials and callback URL. See [dashboard setup and permissions](docs/DASHBOARD.md). `/dashboard` in a repository comment returns the dashboard's public sign-in address, never an operator credential.
+
+Dashboard weight controls use actual percentages: each must be 0–100 (up to two decimal places), totaling exactly 100%. The form shows the total and how much to add or remove, and disables Save when invalid. The API rejects invalid totals independently. Existing `/weights` command and ACTIVITY_WEIGHTS settings remain relative for compatibility; the dashboard converts those to percentages when opening the editor.
